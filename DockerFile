@@ -1,42 +1,46 @@
-# Set the base image to PHP 7.4 with Apache
-FROM php:7.4-apache
+# Use official PHP image with required version and Apache
+FROM php:7.1-apache
 
-# Set working directory
+# Set the working directory
 WORKDIR /var/www/html
 
-# Install system dependencies
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
-    unzip \
-    libpq-dev \
-    libzip-dev \
+    curl \
     libpng-dev \
     libonig-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql zip gd mbstring
+    libxml2-dev \
+    libzip-dev \
+    unzip \
+    zip \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
-# Enable Apache mod_rewrite
+# Enable Apache mod_rewrite for Laravel
 RUN a2enmod rewrite
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy existing application directory contents to the working directory
+# Copy the Laravel app files into the container
 COPY . /var/www/html
 
-# Copy existing application environment file
-COPY .env.example .env
+# Set the proper permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Install dependencies with Composer
+RUN composer install --no-scripts --no-interaction --prefer-dist
 
-# Set permissions for the Laravel storage and bootstrap/cache directories
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Copy the existing .env.example to .env if .env does not exist
+RUN cp .env.example .env
+
+# Generate application key
+RUN php artisan key:generate
 
 # Expose port 80
 EXPOSE 80
 
-# Start Apache
+# Start the Apache server
 CMD ["apache2-foreground"]
